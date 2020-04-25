@@ -6,4 +6,4 @@ https://www.youtube.com/watch?v=1hSn3B69XXQ
 
 Usage:
 - Create UnityDarkenSettings scriptable object, click all buttons from top to bottom without last one (Undarken all)
-- After next Unity restert just click Tools -> Quick Fix
+- After next Unity restart just click Tools -> Quick Fix
