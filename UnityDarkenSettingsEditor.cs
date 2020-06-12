@@ -17,29 +17,29 @@ namespace KS.UnityDarken
 	public class UnityDarkenSettingsEditor : Editor
 	{
 		UnityDarkenSettings t;
-		SerializedObject GetTarget;
-		SerializedProperty ThisList;
+		SerializedProperty styleSheets;
 		SerializedProperty styleSheetsInverted;
-		SerializedProperty colors;
+		SerializedProperty additiveColors;
 		SerializedProperty runInvertGui;
-
+		SerializedProperty runOnEditorLoad;
+		SerializedProperty runCreateTextures;
 		void OnEnable()
 		{
 			t = (UnityDarkenSettings)target;
-			//t.Load();
-			GetTarget = new SerializedObject( t );
-			ThisList = GetTarget.FindProperty( "styleSheets" );
-			styleSheetsInverted = GetTarget.FindProperty( "styleSheetsInverted" );
-			colors = GetTarget.FindProperty( "colorsPalette" );
-			runInvertGui = GetTarget.FindProperty( "RunInvertGui" );
-
+			styleSheets = serializedObject.FindProperty( "styleSheets" );
+			styleSheetsInverted = serializedObject.FindProperty( "styleSheetsInverted" );
+			additiveColors = serializedObject.FindProperty( "additiveColors" );
+			runInvertGui = serializedObject.FindProperty( "RunInvertGui" );
+			runOnEditorLoad = serializedObject.FindProperty( "RunOnEditorLoad" );
+			runCreateTextures = serializedObject.FindProperty( "RunCreateTextures" );
 		}
 
 		public override void OnInspectorGUI()
 		{
-			GetTarget.Update();
+			serializedObject.Update();
 
-			EditorGUILayout.PropertyField( colors );
+			EditorGUILayout.PropertyField( runOnEditorLoad );
+			EditorGUILayout.PropertyField( additiveColors );
 
 			EditorGUILayout.Space();
 
@@ -48,7 +48,7 @@ namespace KS.UnityDarken
 				t.CreateAllTextures();
 
 			if ( GUILayout.Button( "Load Styles From Memory" ) )
-				t.Load();
+				t.LoadStyleSheets();
 
 			if ( GUILayout.Button( "Set GUI.skin backgrounds to local" ) )
 				t.SetGUIStylesImageToLocal();
@@ -59,10 +59,17 @@ namespace KS.UnityDarken
 			if ( runInvertGui.boolValue )
 			{
 				runInvertGui.boolValue = false;
-				t.Load();
-				t.DarkenAll();
-				t.SetGUIStylesImageToLocal();
-				t.DarkenAllGUIStyles();
+				t.SetGUIStylesImageToLocal( true );
+				t.DarkenAllGUIStyles( true );
+				serializedObject.ApplyModifiedProperties();
+				t.Refresh();
+			}
+
+			if ( runCreateTextures.boolValue )
+			{
+				runCreateTextures.boolValue = false;
+				t.CreateAllTextures();
+				t.Refresh();
 			}
 
 			if ( GUILayout.Button( "Darken All" ) )
@@ -77,17 +84,19 @@ namespace KS.UnityDarken
 
 
 			EditorGUILayout.LabelField( "Light Sheets:" );
-			for ( int i = 0; i < ThisList.arraySize; i++ )
+			for ( int i = 0; i < styleSheets.arraySize; i++ )
 			{
-				SerializedProperty MyListRef = ThisList.GetArrayElementAtIndex(i);
+				SerializedProperty MyListRef = styleSheets.GetArrayElementAtIndex(i);
 				StyleSheet sheet = (StyleSheet)MyListRef.objectReferenceValue;
+				if ( sheet == null )
+					continue;
 				//var sheetCont = new StyleSheetController(sheet);
 				//var serialized = new SerializedObject(MyListRef.objectReferenceValue);
 				EditorGUILayout.BeginHorizontal();
 
 				//if (!sheetCont.IsInverted)
 				//{
-				EditorGUILayout.LabelField( "- " + sheet.name );
+				EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() );
 				if ( GUILayout.Button( "Darken" ) )
 				{
 					t.Darken( sheet, false );
@@ -106,7 +115,7 @@ namespace KS.UnityDarken
 				EditorGUILayout.BeginHorizontal();
 				if ( sheet != null )
 				{
-					EditorGUILayout.LabelField( "- " + sheet.name ?? "" );
+					EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() ?? "" );
 					if ( GUILayout.Button( "Uncolor" ) )
 					{
 						t.Uncolor( sheet );
@@ -115,7 +124,7 @@ namespace KS.UnityDarken
 				EditorGUILayout.EndHorizontal();
 			}
 
-			GetTarget.ApplyModifiedProperties();
+			serializedObject.ApplyModifiedProperties();
 		}
 	}
 }

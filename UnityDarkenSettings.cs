@@ -9,56 +9,158 @@ using System.IO;
 using System.Collections.Generic;
 using Object = UnityEngine.Object;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace KS.UnityDarken
 {
 	[CreateAssetMenu( fileName = "UnityDarkenSettings", menuName = "Darken/CreateSettings", order = 1 )]
 	public class UnityDarkenSettings : ScriptableObject
 	{
-		[MenuItem( "Tools/Darken/Quick Fix" )]
-		public static void QuickFix()
+		static string loadedOnceKey => $"KS.UnityDarken.loadedOnce";
+		static bool loadedOnce
 		{
-			string[] guids1 = AssetDatabase.FindAssets("t:UnityDarkenSettings", null);
-
-			var darken = AssetDatabase.LoadAssetAtPath<UnityDarkenSettings>( AssetDatabase.GUIDToAssetPath( guids1[0] ) );
-			Selection.activeObject = darken;
-			darken.RunInvertGui = true;
-			darken.Refresh();
-
+			get => SessionState.GetBool( loadedOnceKey, false );
+			set => SessionState.SetBool( loadedOnceKey, value );
 		}
 
-		public Color[] colorsPalette = new Color[] { Color.white, Color.grey, Color.black };
-		public List<StyleSheet> styleSheets = new List<StyleSheet>();
-		public List<StyleSheet> styleSheetsInverted = new List<StyleSheet>();
+		[Header("Additive colors based on brightness of light skin")]
+		[SerializeField]
+		ColorWithRange[] additiveColors = new ColorWithRange[] {
+				new ColorWithRange()
+				{
+					BrightnessRangeStart = 0,
+					BrightnessRangeEnd = 1f,
+					ColorToAdd = new Gradient()
+					{ colorKeys = new GradientColorKey[]
+						{
+							new GradientColorKey(Color.black, 0f),
+							new GradientColorKey(Color.blue, 1f)
+						}
+					},
+					Multiplier = -0.05f
+				}
+		};
+
+		public bool RunOnEditorLoad = true;
 		[SerializeField,HideInInspector]
 		public bool RunInvertGui = false; //used from editor script
+		public bool RunCreateTextures = false; //used from editor script
+		[SerializeField] List<StyleSheet> styleSheets = new List<StyleSheet>();
+		[SerializeField] List<StyleSheet> styleSheetsInverted = new List<StyleSheet>();
 
-		private void Refresh()
+		[InitializeOnLoadMethod]
+		static void OnProjectLoadedInEditor()
 		{
-			EditorUtility.RequestScriptReload();
-			InternalEditorUtility.SwitchSkinAndRepaintAllViews();
+			var soPath = AssetDatabase.FindAssets("t:"+ nameof( UnityDarkenSettings )).FirstOrDefault();
+			var so = AssetDatabase.LoadAssetAtPath<UnityDarkenSettings>( AssetDatabase.GUIDToAssetPath( soPath ) );
+
+			if ( so != null && so.RunOnEditorLoad && !loadedOnce )
+			{
+				EditorApplication.delayCall += async () =>
+				{
+					// give editor enough time to complete initial load
+					await Task.Delay( 500 );
+					loadedOnce = true;
+					var t = GetOrCreateSettings();
+					t.ClearLists();
+					QuickFix( t );
+				};
+			}
 		}
 
-		public void Load()
+		[MenuItem( "Tools/Darken/Create Textures" )]
+		static void CreateTextures()
 		{
-			var allSheets = Resources.FindObjectsOfTypeAll<StyleSheet>().ToList();
+			var t = GetOrCreateSettings();
+			t.RunCreateTextures = true;
+			EditorUtility.FocusProjectWindow();
+			Selection.activeObject = t;
+		}
+
+		[MenuItem( "Tools/Darken/Quick Fix" )]
+		static void QuickFix()
+		{
+			QuickFix( null );
+		}
+		static void QuickFix( UnityDarkenSettings t = null )
+		{
+			if ( t == null )
+				t = GetOrCreateSettings();
+			t.LoadStyleSheets( true );
+			t.DarkenAll( true );
+			t.RunInvertGui = true;
+			EditorUtility.FocusProjectWindow();
+			EditorUtility.SetDirty( t );
+			Selection.activeObject = t;
+		}
+
+		[MenuItem( "Tools/Darken/Force Unity RefreshGlobalStyleCatalog" )]
+		static void RefreshGlobalStyleCatalog()
+		{
+			var refresh = typeof( UnityEditor.Experimental.EditorResources )
+				.GetField( "s_RefreshGlobalStyleCatalog", BindingFlags.NonPublic | BindingFlags.Static );
+			refresh.SetValue( null, true );
+		}
+
+		static UnityDarkenSettings GetOrCreateSettings()
+		{
+			string[] guids = AssetDatabase.FindAssets("t:"+ nameof( UnityDarkenSettings ));
+
+			if ( guids.Length == 0 )
+			{
+				var asset = CreateInstance<UnityDarkenSettings>();
+				const string path = "Assets/UnityDarkenThemer/UnityDarkenThemerSettings.asset";
+				Directory.CreateDirectory( System.IO.Path.GetDirectoryName( path ) );
+				AssetDatabase.CreateAsset( asset, path );
+				AssetDatabase.SaveAssets();
+			}
+
+			guids = AssetDatabase.FindAssets( "t:" + nameof( UnityDarkenSettings ) );
+			return AssetDatabase.LoadAssetAtPath<UnityDarkenSettings>( AssetDatabase.GUIDToAssetPath( guids[0] ) );
+		}
+
+		public void ClearLists()
+		{
+			styleSheets.Clear();
+			styleSheetsInverted.Clear();
+		}
+
+		public void Refresh()
+		{
+			RefreshGlobalStyleCatalog();
+			InternalEditorUtility.RepaintAllViews();
+			RefreshGlobalStyleCatalog();
+			EditorUtility.RequestScriptReload();
+			RefreshGlobalStyleCatalog();
+		}
+
+		public void LoadStyleSheets( bool skipRefresh = false )
+		{
+			var allSheets = Resources.FindObjectsOfTypeAll<StyleSheet>();
+
 			styleSheets.Clear();
 
-			for ( int i = 0; i < allSheets.Count; i++ )
+			foreach ( var sheet in allSheets )
 			{
+				//}
+				//for ( int i = 0; i < allSheets.Count; i++ )
+				//{
 				bool isUnitySheet = (bool)(typeof( StyleSheet ).GetField( "isUnityStyleSheet",
 					BindingFlags.NonPublic |
 					BindingFlags.Instance |
-					BindingFlags.IgnoreCase ).GetValue( allSheets[i] ));
+					BindingFlags.IgnoreCase ).GetValue( sheet ));
 
-				if ( !styleSheetsInverted.Contains( allSheets[i] ) )
-						styleSheets.Add( allSheets[i] );
+				if ( !styleSheetsInverted.Contains( sheet ) )
+					styleSheets.Add( sheet );
 			}
 
-			Refresh();
+			EditorUtility.SetDirty( this );
+
+			if ( !skipRefresh )
+				Refresh();
 		}
 
-		public void DarkenAll()
+		public void DarkenAll( bool skipRefresh = false )
 		{
 			#region Old when there was PreviewWindow style, can be used to skip styles
 			//int crashProtection = 10000;
@@ -112,11 +214,10 @@ namespace KS.UnityDarken
 				#endregion
 
 				Darken( style, true );
-				//new StyleSheetController( ref style ).InvertColors();
-				//styleSheetsInverted.Add( style );
-				//styleSheets.Remove( style );
 			}
-			Refresh();
+			EditorUtility.SetDirty( this );
+			if ( !skipRefresh )
+				Refresh();
 		}
 
 		public void CreateAllTextures()
@@ -134,7 +235,7 @@ namespace KS.UnityDarken
 				AddTexturesToList( style.active );
 			}
 
-			Directory.CreateDirectory( Path.Combine( Application.dataPath, "Editor Default Resources", "Icons" ) );
+			Directory.CreateDirectory( Path.Combine( "Assets", "Editor Default Resources", "Icons" ) );
 			for ( int i = 0; i < textures.Count; i++ )//textures.Count
 			{
 
@@ -199,39 +300,61 @@ namespace KS.UnityDarken
 			}
 		}
 
-		public void DarkenAllGUIStyles()
+		public void DarkenAllGUIStyles( bool skipRefresh = false )
 		{
 			foreach ( var style in GUI.skin.customStyles )
 			{
-				style.normal.textColor = Utils.InvertColor( style.normal.textColor );
-				style.onNormal.textColor = Utils.InvertColor( style.onNormal.textColor );
-				style.onActive.textColor = Utils.InvertColor( style.onActive.textColor );
-				style.onFocused.textColor = Utils.InvertColor( style.onFocused.textColor );
-				style.onHover.textColor = Utils.InvertColor( style.onHover.textColor );
-				style.hover.textColor = Utils.InvertColor( style.hover.textColor );
-				style.focused.textColor = Utils.InvertColor( style.focused.textColor );
-				style.active.textColor = Utils.InvertColor( style.active.textColor );
+				style.normal.textColor = Utils.InvertColorWithAddition( style.normal.textColor, additiveColors );
+				style.onNormal.textColor = Utils.InvertColorWithAddition( style.onNormal.textColor, additiveColors );
+				style.onActive.textColor = Utils.InvertColorWithAddition( style.onActive.textColor, additiveColors );
+				style.onFocused.textColor = Utils.InvertColorWithAddition( style.onFocused.textColor, additiveColors );
+				style.onHover.textColor = Utils.InvertColorWithAddition( style.onHover.textColor, additiveColors );
+				style.hover.textColor = Utils.InvertColorWithAddition( style.hover.textColor, additiveColors );
+				style.focused.textColor = Utils.InvertColorWithAddition( style.focused.textColor, additiveColors );
+				style.active.textColor = Utils.InvertColorWithAddition( style.active.textColor, additiveColors );
 			}
-
-			Refresh();
+			if ( !skipRefresh )
+				Refresh();
 		}
 
-		public void SetGUIStylesImageToLocal()
+		public void SetGUIStylesImageToLocal( bool skipRefresh = false )
 		{
-			var icons = AssetDatabase.FindAssets(" t:texture2D", new[] { "Assets/Editor Default Resources/Icons" });
-			Debug.Log( icons.Length );
+			var assembly = typeof(EditorStyles).Assembly;
+			var a = assembly.GetType( "UnityEditor.DockArea" ).GetNestedType("Styles", BindingFlags.Static | BindingFlags.NonPublic);
+			foreach ( var item in a.GetFields( BindingFlags.Static | BindingFlags.NonPublic ) )
+			{
+				Debug.Log( $"variable: {item.Name}" );
+			}
+			var b = a.GetField( "dockTitleBarStyle", BindingFlags.Static | BindingFlags.Public);
+
+			var dockTitleBarStyleInfo = b.GetValue(null) as GUIStyle;
+			//Debug.Log( $"dockTitleBarStyleInfo.normal.background.name: {dockTitleBarStyleInfo.normal.background.name}" );
+			//dockTitleBarStyleInfo.fixedHeight = 5;
+			dockTitleBarStyleInfo.fontStyle = FontStyle.Normal;
+
+			var path = "Assets/Editor Default Resources/Icons";
+			Directory.CreateDirectory( path );
+			var icons = AssetDatabase.FindAssets(" t:texture2D", new[] { path });
+			//Debug.Log( icons.Length );
 			foreach ( var icon in icons )
 			{
 				var name = Path.GetFileNameWithoutExtension(AssetDatabase.GUIDToAssetPath(icon));
 				var texture = (Texture2D)EditorGUIUtility.Load(name);
+				//if ( name == "dockarea back@2x" )
+				//	;
 				if ( texture != null )
 					ChangePointer( texture );
 			}
 
-			//var skin = GUI.skin;
+			var skin = GUI.skin;
 
 			foreach ( var style in GUI.skin.customStyles )
 			{
+				//if ( style.name == "dragtab" )
+				//	;
+
+				//style.fontStyle = FontStyle.Bold;
+
 				ChangeBackgroundsPointers( style.normal );
 				ChangeBackgroundsPointers( style.onNormal );
 				ChangeBackgroundsPointers( style.onActive );
@@ -242,18 +365,21 @@ namespace KS.UnityDarken
 				ChangeBackgroundsPointers( style.focused );
 			}
 
-			//GUI.skin = skin;
-
-			Refresh();
+			GUI.skin = skin;
+			if ( !skipRefresh )
+				Refresh();
 
 			GUIStyleState ChangeBackgroundsPointers( GUIStyleState state )
 			{
+				//state.background. = Utils.InvertColor( state.textColor );
 				if ( state.background != null )
 					ChangePointer( state.background );
 
 				for ( int i = 0; i < state.scaledBackgrounds.Length; i++ )
+				{
 					if ( state.scaledBackgrounds[i] != null )
 						ChangePointer( state.scaledBackgrounds[i] );
+				}
 
 				return state;
 			}
@@ -271,10 +397,27 @@ namespace KS.UnityDarken
 						$"Exception: {e.ToString()}" );
 				}
 			}
+			//void ChangePointer( Texture2D texture )
+			//{
+			//	try
+			//	{
+			//		texture = (Texture2D)EditorGUIUtility.LoadRequired( "Icons/" + texture.name + ".png" );
+			//		//var texture2 = (Texture2D)EditorGUIUtility.LoadRequired("Icons/" + texture.name + ".png");
+			//		//texture.UpdateExternalTexture( texture2.GetNativeTexturePtr() );
+			//	}
+			//	catch ( Exception e )
+			//	{
+			//		Debug.Log( $"Skipping texture: {texture.name}\n" +
+			//			$"Exception: {e.ToString()}" );
+			//	}
+			//}
 		}
 
 		public void Darken( StyleSheet style, bool skipRefresh )
 		{
+			//AssetDatabase.GetAssetPath( style )
+			//if( style.
+
 			var controller = new StyleSheetController(style);
 			//var darkStyle = FindDarkSheet(style);
 			//if ( darkStyle != null )
@@ -285,24 +428,25 @@ namespace KS.UnityDarken
 			//	EditorUtility.CopySerialized( temp, darkStyle );
 			//}
 			//else
-			controller.InvertColors();
+			controller.InvertColorsWithAddition( additiveColors );
 			styleSheetsInverted.Add( style );
 			styleSheets.Remove( style );
+			EditorUtility.SetDirty( this );
 
 			if ( !skipRefresh )
 				Refresh();
 		}
 
-		//public StyleSheet FindDarkSheet( StyleSheet style )
-		//{
-		//	StyleSheet darkStyle = null;
-		//	if ( style.name.Contains( "light" ) || style.name.Contains( "Light" ) )
-		//	{
-		//		var darkName = style.name.Replace("Light", "Dark").Replace("light", "dark");
-		//		darkStyle = styleSheets.FirstOrDefault( s => s.name == darkName );
-		//	}
-		//	return darkStyle;
-		//}
+		public StyleSheet FindDarkSheet( StyleSheet style )
+		{
+			StyleSheet darkStyle = null;
+			if ( style.name.Contains( "light" ) || style.name.Contains( "Light" ) )
+			{
+				var darkName = style.name.Replace("Light", "Dark").Replace("light", "dark");
+				darkStyle = styleSheets.FirstOrDefault( s => s.name == darkName );
+			}
+			return darkStyle;
+		}
 
 		//public StyleSheet FindLightSheet( StyleSheet style )
 		//{
@@ -332,7 +476,7 @@ namespace KS.UnityDarken
 				//else
 				if ( style != null )
 				{
-					new StyleSheetController( style ).InvertColors();
+					new StyleSheetController( style ).ReverseInvertColorsWithAddition( additiveColors );
 					styleSheets.Add( style );
 				}
 				styleSheetsInverted.Remove( style );
@@ -344,29 +488,21 @@ namespace KS.UnityDarken
 		public void Uncolor( StyleSheet sheet )
 		{
 			var controller = new StyleSheetController(sheet);
-			controller.InvertColors();
+			controller.ReverseInvertColorsWithAddition( additiveColors );
 			styleSheets.Add( sheet );
 			styleSheetsInverted.Remove( sheet );
 
+			EditorUtility.SetDirty( this );
 			Refresh();
 		}
 
-		//void SwapSheets( StyleSheet a, StyleSheet b )
-		//{
-		//	StyleSheet temp = CreateInstance<StyleSheet>();
-		//	EditorUtility.CopySerialized( a, temp );
-		//	EditorUtility.CopySerialized( b, a );
-		//	EditorUtility.CopySerialized( temp, b );
-		//}
-
-	}
-
-	public static class Utils
-	{
-		public static Color InvertColor( Color color )
-		//tried also hsv inversion but this looks better
+		void SwapSheets( StyleSheet a, StyleSheet b )
 		{
-			return new Color( 1 - color.r, 1 - color.g, 1 - color.b, color.a );
+			StyleSheet temp = CreateInstance<StyleSheet>();
+			EditorUtility.CopySerialized( a, temp );
+			EditorUtility.CopySerialized( b, a );
+			EditorUtility.CopySerialized( temp, b );
 		}
+
 	}
 }

@@ -21,7 +21,24 @@ namespace KS.UnityDarken
 			Sheet = style;
 		}
 
-		public void InvertColors()
+		//public void InvertColors(  )
+		//{
+		//	var serialized = new SerializedObject(Sheet);
+		//	serialized.Update();
+		//	var colors = serialized.FindProperty("colors");
+		//	if ( colors != null )
+		//	{
+		//		for ( int i = 0; i < colors.arraySize; i++ )
+		//		{
+		//			var property = colors.GetArrayElementAtIndex(i);
+		//			//Debug.Log( $"name: {property.name} color: {property.colorValue}" );
+		//			property.colorValue = Utils.InvertColor( property.colorValue );
+		//		}
+		//		serialized.ApplyModifiedProperties();
+		//	}
+		//}
+
+		public void InvertColorsWithAddition( ColorWithRange[] palette)
 		{
 			var serialized = new SerializedObject(Sheet);
 			serialized.Update();
@@ -32,9 +49,25 @@ namespace KS.UnityDarken
 				{
 					var property = colors.GetArrayElementAtIndex(i);
 					//Debug.Log( $"name: {property.name} color: {property.colorValue}" );
-					property.colorValue = Utils.InvertColor( property.colorValue );
+					property.colorValue = Utils.InvertColorWithAddition( property.colorValue, palette );
 				}
+				serialized.ApplyModifiedProperties();
+			}
+		}
 
+		public void ReverseInvertColorsWithAddition( ColorWithRange[] palette )
+		{
+			var serialized = new SerializedObject(Sheet);
+			serialized.Update();
+			var colors = serialized.FindProperty("colors");
+			if ( colors != null )
+			{
+				for ( int i = 0; i < colors.arraySize; i++ )
+				{
+					var property = colors.GetArrayElementAtIndex(i);
+					//Debug.Log( $"name: {property.name} color: {property.colorValue}" );
+					property.colorValue = Utils.ReverseInvertColorWithAddition( property.colorValue, palette );
+				}
 				serialized.ApplyModifiedProperties();
 			}
 		}
