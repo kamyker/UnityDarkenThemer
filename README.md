@@ -30,5 +30,5 @@ By default inverted colors have 5% less blue color to change it:
 
 ![UnityTheming](https://i.gyazo.com/4b08eb4e58bc5fb3d80d523135d59502.png)
 
-Just kidding, purpose of this image is to see how gradient defined in step 2. matches other colors and panel:
+Just kidding, purpose of this image is to see how gradient defined in step 2. matches other colors and panels:
 ![UnityThemingGradient](https://i.gyazo.com/94c5bb0cd5e592b1c13db5367b1476dc.png)
