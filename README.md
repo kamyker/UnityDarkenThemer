@@ -17,7 +17,8 @@ This option saves and inverts colors of all editor textures to `Assets\Editor De
 ## Uninstallation:
 1. Remove package from Package Manager.
 2. Remove "Library\Style.catalog" file as that's where Unity caches style sheets.
-3. Restart Unity.
+3. Remove "Assets\Editor Default Resources\Icons" folder.
+4. Restart Unity.
 
 ## Theming
 By default inverted colors have 5% less blue color to change it:
