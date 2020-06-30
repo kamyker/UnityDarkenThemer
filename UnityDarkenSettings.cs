@@ -317,6 +317,44 @@ namespace KS.UnityDarken
 				Refresh();
 		}
 
+		//this doesn't work or "SetGUIStylesImageToLocal" already does it
+		public void SetStyleSheetsImageToLocal( bool skipRefresh = false )
+		{
+			foreach ( var style in styleSheetsInverted )
+			{
+				var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+				var imgs = typeof( StyleSheet )
+					.GetField( "scalableImages", flags )
+					.GetValue(style);
+				foreach ( object scalableImg in (Array)imgs )
+				{
+					var normal = scalableImg.GetType().GetField( "normalImage", flags ).GetValue( scalableImg ) as Texture2D;
+					var hRes = scalableImg.GetType().GetField( "highResolutionImage", flags ).GetValue( scalableImg ) as Texture2D;
+					if ( normal != null )
+						ChangePointer( normal );
+					if ( hRes != null )
+						ChangePointer( hRes );
+				}
+			}
+
+			if ( !skipRefresh )
+				Refresh();
+
+			void ChangePointer( Texture2D texture )
+			{
+				try
+				{
+					var texture2 = (Texture2D)EditorGUIUtility.LoadRequired("Icons/" + texture.name + ".png");
+					texture.UpdateExternalTexture( texture2.GetNativeTexturePtr() );
+				}
+				catch ( Exception e )
+				{
+					Debug.Log( $"Skipping texture: {texture.name}\n" +
+						$"Exception: {e.ToString()}" );
+				}
+			}
+		}
+
 		public void SetGUIStylesImageToLocal( bool skipRefresh = false )
 		{
 			var assembly = typeof(EditorStyles).Assembly;
@@ -366,6 +404,8 @@ namespace KS.UnityDarken
 			}
 
 			GUI.skin = skin;
+
+
 			if ( !skipRefresh )
 				Refresh();
 
@@ -373,28 +413,36 @@ namespace KS.UnityDarken
 			{
 				//state.background. = Utils.InvertColor( state.textColor );
 				if ( state.background != null )
-					ChangePointer( state.background );
+					state.background = ChangePointer( state.background );
 
 				for ( int i = 0; i < state.scaledBackgrounds.Length; i++ )
 				{
 					if ( state.scaledBackgrounds[i] != null )
-						ChangePointer( state.scaledBackgrounds[i] );
+						state.scaledBackgrounds[i] = ChangePointer( state.scaledBackgrounds[i] );
 				}
 
 				return state;
 			}
 
-			void ChangePointer( Texture2D texture )
+			Texture2D ChangePointer( Texture2D texture )
 			{
 				try
 				{
-					var texture2 = (Texture2D)EditorGUIUtility.LoadRequired("Icons/" + texture.name + ".png");
-					texture.UpdateExternalTexture( texture2.GetNativeTexturePtr() );
+					if ( !File.Exists( Application.dataPath + "/Editor Default Resources/Icons/" + texture.name + ".png" ))
+					{
+						Debug.Log( $"Skipping texture: {texture.name}\n" +
+							$"Exception: {texture.name}" );
+						return null;
+					}
+					var textureInverted = (Texture2D)EditorGUIUtility.LoadRequired("Icons/" + texture.name + ".png");
+					texture.UpdateExternalTexture( textureInverted.GetNativeTexturePtr() );
+					return textureInverted;
 				}
 				catch ( Exception e )
 				{
 					Debug.Log( $"Skipping texture: {texture.name}\n" +
 						$"Exception: {e.ToString()}" );
+					return texture;
 				}
 			}
 			//void ChangePointer( Texture2D texture )

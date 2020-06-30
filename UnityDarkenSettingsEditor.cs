@@ -53,6 +53,9 @@ namespace KS.UnityDarken
 			if ( GUILayout.Button( "Set GUI.skin backgrounds to local" ) )
 				t.SetGUIStylesImageToLocal();
 
+			if ( GUILayout.Button( "Set style sheets images to local" ) )
+				t.SetStyleSheetsImageToLocal();
+
 			if ( GUILayout.Button( "Invert All GUI.skin styles" ) )
 				t.DarkenAllGUIStyles();
 
@@ -86,42 +89,46 @@ namespace KS.UnityDarken
 			EditorGUILayout.LabelField( "Light Sheets:" );
 			for ( int i = 0; i < styleSheets.arraySize; i++ )
 			{
-				SerializedProperty MyListRef = styleSheets.GetArrayElementAtIndex(i);
-				StyleSheet sheet = (StyleSheet)MyListRef.objectReferenceValue;
-				if ( sheet == null )
-					continue;
-				//var sheetCont = new StyleSheetController(sheet);
-				//var serialized = new SerializedObject(MyListRef.objectReferenceValue);
-				EditorGUILayout.BeginHorizontal();
-
-				//if (!sheetCont.IsInverted)
-				//{
-				EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() );
-				if ( GUILayout.Button( "Darken" ) )
+				using ( SerializedProperty serializedSheet = styleSheets.GetArrayElementAtIndex( i ) )
 				{
-					t.Darken( sheet, false );
-				}
+					StyleSheet sheet = (StyleSheet)serializedSheet.objectReferenceValue;
+					if ( sheet == null )
+						continue;
+					//var sheetCont = new StyleSheetController(sheet);
+					//var serialized = new SerializedObject(MyListRef.objectReferenceValue);
+					EditorGUILayout.BeginHorizontal();
+
+					//if (!sheetCont.IsInverted)
+					//{
+					EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() );
+					if ( GUILayout.Button( "Darken" ) )
+					{
+						t.Darken( sheet, false );
+					}
 				//}
 
 				EditorGUILayout.EndHorizontal();
+				}
 			}
 			EditorGUILayout.Space();
 
 			EditorGUILayout.LabelField( "Inverted Sheets:" );
 			for ( int i = 0; i < styleSheetsInverted.arraySize; i++ )
 			{
-				SerializedProperty MyListRef = styleSheetsInverted.GetArrayElementAtIndex(i);
-				StyleSheet sheet = (StyleSheet)MyListRef.objectReferenceValue;
-				EditorGUILayout.BeginHorizontal();
-				if ( sheet != null )
+				using ( SerializedProperty serializedSheet = styleSheetsInverted.GetArrayElementAtIndex( i ) )
 				{
-					EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() ?? "" );
-					if ( GUILayout.Button( "Uncolor" ) )
+					StyleSheet sheet = (StyleSheet)serializedSheet.objectReferenceValue;
+					EditorGUILayout.BeginHorizontal();
+					if ( sheet != null )
 					{
-						t.Uncolor( sheet );
+						EditorGUILayout.LabelField( "- " + sheet.name + " " + sheet.GetHashCode() ?? "" );
+						if ( GUILayout.Button( "Uncolor" ) )
+						{
+							t.Uncolor( sheet );
+						}
 					}
-				}
 				EditorGUILayout.EndHorizontal();
+				}
 			}
 
 			serializedObject.ApplyModifiedProperties();
